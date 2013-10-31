@@ -1,0 +1,3 @@
+[submodule "python_pulseaudio"]
+	path = python_pulseaudio
+	url = https://github.com/Valodim/python-pulseaudio.git
