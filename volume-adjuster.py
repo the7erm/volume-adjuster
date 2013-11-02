@@ -395,7 +395,7 @@ class VolumeAdjuster:
                 reason = "Way too loud"
 
             if extreamely_loud_count >= 2:
-                adj = -8
+                adj = -10
                 reason = "127 all the way"
 
             if too_soft_cnt >= 2:
