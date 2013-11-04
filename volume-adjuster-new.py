@@ -60,7 +60,7 @@ class PeakMonitor(object):
     def subscribe(self, context, event_type, idx, *args, **kwargs):
         if event_type in (5, 18,37):
             return
-        print "event_type:", event_type, "idx:",idx
+        # print "event_type:", event_type, "idx:",idx
         if (event_type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) == PA_SUBSCRIPTION_EVENT_SINK_INPUT:
             mask = event_type & PA_SUBSCRIPTION_EVENT_TYPE_MASK
             if mask == PA_SUBSCRIPTION_EVENT_NEW:
@@ -70,8 +70,7 @@ class PeakMonitor(object):
                 pa_operation_unref(o)
 
             if mask == PA_SUBSCRIPTION_EVENT_REMOVE:
-                
-                print "REMOVE SINK"
+                print "REMOVE SINK", idx
                 print "event_type:", event_type.__repr__()
                 print "idx:", idx
                 del self._ques["%s" % idx]
@@ -410,17 +409,21 @@ class VolumeAdjuster:
         this_history = []
         for s in self.sinks:
             idx = "%s" % s['index']
-            sink_input = self.input_sink_samples[idx]
-            this_history.append({
-                "min": sink_input['min'],
-                "max": sink_input['max'],
-                "avg": sink_input['avg'],
-                "mid": sink_input['mid'],
-                "idx": s["index"],
-                "vol": s['volume']["0"],
-                "name": s['properties']['application.name']
-            })
-        self.history.append(this_history)
+            try:
+                sink_input = self.input_sink_samples[idx]
+                this_history.append({
+                    "min": sink_input['min'],
+                    "max": sink_input['max'],
+                    "avg": sink_input['avg'],
+                    "mid": sink_input['mid'],
+                    "idx": s["index"],
+                    "vol": s['volume']["0"],
+                    "name": s['properties']['application.name']
+                })
+            except KeyError, e:
+                print "KeyError:",e
+        if this_history:
+            self.history.append(this_history)
         if len(self.history) > self.target_history_len:
             self.history = self.history[1:]
         return
@@ -568,7 +571,11 @@ class VolumeAdjuster:
                 new_vol = int(self.convert_vol_to_k(vol))
                 exe = "pacmd set-sink-input-volume %s %s" % (idx, new_vol)
                 # print exe
-                input_sink_sample = self.input_sink_samples["%s" % idx]
+                try:
+                    input_sink_sample = self.input_sink_samples["%s" % idx]
+                except KeyError, e:
+                    print "KeyError:",e
+                    continue
                 print "input_sink_sample:", input_sink_sample
                 if self.count >= METER_RATE and new_vol > 0 and \
                    input_sink_sample['min'] > 0:
