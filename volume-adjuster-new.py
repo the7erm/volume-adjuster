@@ -2,7 +2,7 @@
 # A good portion of this script was taken from
 # http://freshfoo.com/blog/pulseaudio_monitoring
 import sys
-from Queue import Queue
+from Queue import Queue, Empty
 from ctypes import POINTER, c_ubyte, c_void_p, c_ulong, cast
 import subprocess
 import re
@@ -58,21 +58,23 @@ class PeakMonitor(object):
         pa_threaded_mainloop_start(_mainloop)
 
     def subscribe(self, context, event_type, idx, *args, **kwargs):
+        if event_type in (5, 18,37):
+            return
+        print "event_type:", event_type, "idx:",idx
         if (event_type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) == PA_SUBSCRIPTION_EVENT_SINK_INPUT:
             mask = event_type & PA_SUBSCRIPTION_EVENT_TYPE_MASK
             if mask == PA_SUBSCRIPTION_EVENT_NEW:
-                print "NEW SINK"
-                print "event_type:", event_type.__repr__()
-                print "idx:", idx
+                print "NEW SINK",idx
                 self._ques["%s" % idx] = Queue()
-                # [POINTER(pa_context), uint32_t, pa_sink_input_info_cb_t, c_void_p]
                 o = pa_context_get_sink_input_info(context, idx, self._sink_input_info_cb, None)
                 pa_operation_unref(o)
+
             if mask == PA_SUBSCRIPTION_EVENT_REMOVE:
-                del self._ques["%s" % idx]
+                
                 print "REMOVE SINK"
                 print "event_type:", event_type.__repr__()
                 print "idx:", idx
+                del self._ques["%s" % idx]
 
     def subscribe_success(self, *args, **kwargs):
         print "subscribe_success", args
@@ -83,8 +85,11 @@ class PeakMonitor(object):
 
     def get_sink_input_samples(self):
         samples = {}
-        for idx, q in self._ques.iteritems():
-            samples[idx] = q.get()
+        for idx, q in self._ques.items():
+            try:
+                samples[idx] = q.get(False)
+            except Empty:
+                samples[idx] = 0
         return samples
 
     def context_notify_cb(self, context, _):
