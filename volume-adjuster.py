@@ -52,7 +52,7 @@ class PeakMonitor(object):
         # connection to Pulseaudio
         _mainloop = pa_threaded_mainloop_new()
         _mainloop_api = pa_threaded_mainloop_get_api(_mainloop)
-        context = pa_context_new(_mainloop_api, 'peak_demo')
+        context = pa_context_new(_mainloop_api, 'volume-adjuster')
         pa_context_set_state_callback(context, self._context_notify_cb, None)
         pa_context_connect(context, None, 0, None)
         pa_threaded_mainloop_start(_mainloop)
@@ -137,7 +137,7 @@ class PeakMonitor(object):
 
             self.monitor_source_name = sink_info.monitor_source_name
 
-            pa_stream = pa_stream_new(context, "peak detect demo", samplespec, None)
+            pa_stream = pa_stream_new(context, "main-output", samplespec, None)
             pa_stream_set_read_callback(pa_stream,
                                         self._stream_read_cb,
                                         sink_info.index)
@@ -185,7 +185,7 @@ class PeakMonitor(object):
         samplespec.format = PA_SAMPLE_U8
         samplespec.rate = self.rate
         self._ques["%s" % sink_input_info.index] = Queue()
-        pa_stream = pa_stream_new(context, "peak detect demo 2", samplespec, None)
+        pa_stream = pa_stream_new(context, "input-sink %s" % sink_input_info.name, samplespec, None)
         pa_stream_set_monitor_stream(pa_stream, sink_input_info.index);
         pa_stream_set_read_callback(pa_stream,
                                     self._stream_input_read_cb,
