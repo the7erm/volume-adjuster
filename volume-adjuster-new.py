@@ -88,6 +88,7 @@ class PeakMonitor(object):
             try:
                 samples[idx] = q.get(False)
             except Empty:
+                print "Empty"
                 samples[idx] = 0
         return samples
 
