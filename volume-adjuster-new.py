@@ -435,6 +435,18 @@ class VolumeAdjuster:
         self.max_value = 0
         self.input_sink_samples = {}
 
+    def print_history(self):
+        print "["
+        # [{'name': 'fmp-pg.py', 'idx': 70, 'min': 40, 'vol': 97, 'max': 102, 'mid': 71, 'avg': 73}]
+        for i, h in enumerate(self.history):
+            for sink in h:
+                print "%3s:" % i,
+                for k, v in sink.iteritems():
+                    print "%s:%3s" % (k, v),
+                print ""
+        
+        print "]"
+
     def print_bar(self, adj, reason):
         bar_data = {}
         for i in range(-1, 200):
@@ -476,7 +488,8 @@ class VolumeAdjuster:
         new_bar = new_bar[:max_pos-2] + ("%3d]" % self.max_value) + new_bar[max_pos+2:]
         new_bar = new_bar[:48] + "T" + new_bar[48:]
 
-        pprint.pprint(self.history)
+        self.print_history()
+        # pprint.pprint(self.history)
         print "nb [",new_bar,"]",
         if adj > 0:
             print "+%s" % adj,reason
