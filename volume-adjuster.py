@@ -2,7 +2,7 @@
 # A good portion of this script was taken from
 # http://freshfoo.com/blog/pulseaudio_monitoring
 import sys
-from Queue import Queue
+from Queue import Queue, Empty
 from ctypes import POINTER, c_ubyte, c_void_p, c_ulong, cast
 import subprocess
 import re
@@ -35,8 +35,17 @@ class PeakMonitor(object):
         self._sink_info_cb = pa_sink_info_cb_t(self.sink_info_cb)
         self._stream_read_cb = pa_stream_request_cb_t(self.stream_read_cb)
 
+
+        self._stream_input_read_cb = pa_stream_request_cb_t(self.stream_input_read_cb)
+
+        self._subscribe = pa_context_subscribe_cb_t(self.subscribe)
+        # pa_context_subscribe_cb_t = CFUNCTYPE(None, POINTER(pa_context), pa_subscription_event_type_t, uint32_t, c_void_p)
+
+        self._subscribe_success = pa_context_success_cb_t(self.subscribe_success)
+
         # stream_read_cb() puts peak samples into this Queue instance
         self._samples = Queue()
+        self._ques = {}
 
         # Create the mainloop thread and set our context_notify_cb
         # method to be called when there's updates relating to the
@@ -48,9 +57,40 @@ class PeakMonitor(object):
         pa_context_connect(context, None, 0, None)
         pa_threaded_mainloop_start(_mainloop)
 
+    def subscribe(self, context, event_type, idx, *args, **kwargs):
+        if event_type in (5, 18,37):
+            return
+        # print "event_type:", event_type, "idx:",idx
+        if (event_type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) == PA_SUBSCRIPTION_EVENT_SINK_INPUT:
+            mask = event_type & PA_SUBSCRIPTION_EVENT_TYPE_MASK
+            if mask == PA_SUBSCRIPTION_EVENT_NEW:
+                print "NEW SINK",idx
+                self._ques["%s" % idx] = Queue()
+                o = pa_context_get_sink_input_info(context, idx, self._sink_input_info_cb, None)
+                pa_operation_unref(o)
+
+            if mask == PA_SUBSCRIPTION_EVENT_REMOVE:
+                print "REMOVE SINK", idx
+                print "event_type:", event_type.__repr__()
+                print "idx:", idx
+                del self._ques["%s" % idx]
+
+    def subscribe_success(self, *args, **kwargs):
+        print "subscribe_success", args
+
     def __iter__(self):
         while True:
             yield self._samples.get()
+
+    def get_sink_input_samples(self):
+        samples = {}
+        for idx, q in self._ques.items():
+            try:
+                samples[idx] = q.get(False)
+            except Empty:
+                print "Empty"
+                samples[idx] = 0
+        return samples
 
     def context_notify_cb(self, context, _):
         state = pa_context_get_state(context)
@@ -61,6 +101,7 @@ class PeakMonitor(object):
             # be called with information about the available sinks.
             o = pa_context_get_sink_info_list(context, self._sink_info_cb, None)
             pa_operation_unref(o)
+            self._sink_input_info_cb = pa_sink_input_info_cb_t(self.sink_input_info_cb)
 
         elif state == PA_CONTEXT_FAILED :
             print "Connection failed"
@@ -83,6 +124,7 @@ class PeakMonitor(object):
         print "self.sink_name:", self.sink_name
 
         if sink_info.name == self.sink_name:
+
             # Found the sink we want to monitor for peak levels.
             # Tell PA to call stream_read_cb with peak samples.
             print
@@ -93,6 +135,8 @@ class PeakMonitor(object):
             samplespec.format = PA_SAMPLE_U8
             samplespec.rate = self.rate
 
+            self.monitor_source_name = sink_info.monitor_source_name
+
             pa_stream = pa_stream_new(context, "peak detect demo", samplespec, None)
             pa_stream_set_read_callback(pa_stream,
                                         self._stream_read_cb,
@@ -101,6 +145,60 @@ class PeakMonitor(object):
                                      sink_info.monitor_source_name,
                                      None,
                                      PA_STREAM_PEAK_DETECT)
+
+            """
+            pa_operation* pa_context_subscribe  (   
+                pa_context *    c,
+                pa_subscription_mask_t  m,
+                pa_context_success_cb_t     cb,
+                void *  userdata 
+            )   """
+            # PA_SUBSCRIPTION_EVENT_CHANGE
+            # PA_SUBSCRIPTION_MASK_SINK_INPUT
+            # PA_SUBSCRIPTION_EVENT_SINK_INPUT
+            # PA_SUBSCRIPTION_MASK_SINK
+            # PA_STREAM_READY
+            # PA_SUBSCRIPTION_MASK_SOURCE_OUTPUT
+            # PA_SUBSCRIPTION_EVENT_SINK_INPUT
+            pa_context_subscribe(
+                context, 
+                PA_SUBSCRIPTION_MASK_ALL, 
+                self._subscribe_success, None)
+            pa_context_set_subscribe_callback(context, self._subscribe, None)
+
+            o = pa_context_get_sink_input_info_list(context, self._sink_input_info_cb, None)
+            pa_operation_unref(o)
+
+
+    def sink_input_info_cb(self, context, sink_input_info_p, _, __):
+        print "*"*60
+        if not sink_input_info_p:
+            print "none", sink_input_info_p
+            print "/"*60
+            return
+        print "="*60
+        print "sink_input_info_p.contents.name:", sink_input_info_p.contents.name
+        print "sink_input_info_p.contents.index:", sink_input_info_p.contents.index
+        sink_input_info = sink_input_info_p.contents
+        samplespec = pa_sample_spec()
+        samplespec.channels = 1
+        samplespec.format = PA_SAMPLE_U8
+        samplespec.rate = self.rate
+        self._ques["%s" % sink_input_info.index] = Queue()
+        pa_stream = pa_stream_new(context, "peak detect demo 2", samplespec, None)
+        pa_stream_set_monitor_stream(pa_stream, sink_input_info.index);
+        pa_stream_set_read_callback(pa_stream,
+                                    self._stream_input_read_cb,
+                                    sink_input_info.index,
+                                    None)
+
+        pa_stream_connect_record(pa_stream,
+                                 self.monitor_source_name,
+                                 None,
+                                 PA_STREAM_PEAK_DETECT)
+
+        print "/"*60
+
 
     def stream_read_cb(self, stream, length, index_incr):
         data = c_void_p()
@@ -111,6 +209,22 @@ class PeakMonitor(object):
             # to 255 because the underlying audio data is signed but
             # it doesn't make sense to return signed peaks.
             self._samples.put(data[i] - 128)
+            # print "stream_read_cb:",data[i]  - 128
+        pa_stream_drop(stream)
+
+    def stream_input_read_cb(self, stream, length, index_incr):
+        # print "stream:",stream
+        # print "index_incr:", index_incr
+        data = c_void_p()
+        pa_stream_peek(stream, data, c_ulong(length))
+        data = cast(data, POINTER(c_ubyte))
+        for i in xrange(length):
+            # When PA_SAMPLE_U8 is used, samples values range from 128
+            # to 255 because the underlying audio data is signed but
+            # it doesn't make sense to return signed peaks.
+            # self._samples.put(data[i] - 128)
+            # print "stream_input_read_cb:",data[i]  - 128
+            self._ques["%s" % index_incr].put(data[i] - 128)
         pa_stream_drop(stream)
 
 
@@ -137,6 +251,7 @@ class VolumeAdjuster:
         self.last_max_value = 0
         self.target_history_len = 2
         self.history = []
+        self.input_sink_samples = {}
         self.volume_re = re.compile(r"volume\: \d+\:\s+(\d+)\%")
         self.colon_re = re.compile(r"([A-z\ ]+)\:\ (.*)$")
         self.dangling_colon_re = re.compile(r"([A-z\ ]+)\:$")
@@ -221,15 +336,32 @@ class VolumeAdjuster:
     def convert_vol_to_k(self, vol):
         return (self.convert_to_dec(vol) * 65536)
 
-    def process_sample(self, sample):
+    def process_sample(self, sample, input_samples):
         self.count += 1
         self.total += sample
+
+        for k, s in input_samples.iteritems():
+            if k not in self.input_sink_samples:
+                self.input_sink_samples[k] = {
+                    "count": 0,
+                    "total": 0,
+                    "min": 127,
+                    "max": 0
+                }
+            self.input_sink_samples[k]['count'] += 1
+            self.input_sink_samples[k]['total'] += s
+            if s < self.input_sink_samples[k]['min']:
+                self.input_sink_samples[k]['min'] = s
+            if s > self.input_sink_samples[k]['max']:
+                self.input_sink_samples[k]['max'] = s
+
         if sample < self.min_value:
             self.min_value = sample
         if sample > self.max_value:
             self.max_value = sample
         if self.count >= self.METER_RATE:
             self.process_levels()
+
 
     def process_levels(self):
         self.sinks = self.get_sink_input_info()
@@ -248,29 +380,51 @@ class VolumeAdjuster:
         try:
             self.average = self.total / self.count
         except ZeroDivisionError:
-            return
-        self.total = 0
+            self.average = 0
+        
+        for k, s in self.input_sink_samples.iteritems():
+            try:
+                self.input_sink_samples[k]['avg'] = s['total'] / s['count']
+            except ZeroDivisionError:
+                self.input_sink_samples[k]['avg'] = 0
+
+        if self.average != 0:
+            self.total = 0
+
 
     def caclulate_mid_value(self):
         self.mid_value = -1
         try:
             self.mid_value = ((self.max_value - self.min_value) / 2) + self.min_value
         except ZeroDivisionError:
-            pass
+            self.mid_value = 0
+
+        for k, s in self.input_sink_samples.iteritems():
+            try:
+                self.input_sink_samples[k]['mid'] = (
+                    (s['max'] - s['min']) / 2) + s['min']
+            except ZeroDivisionError:
+                self.input_sink_samples[k]['mid'] = 0
 
     def append_history(self):
         this_history = []
         for s in self.sinks:
-            this_history.append({
-                "min": self.min_value,
-                "max": self.max_value,
-                "avg": self.average,
-                "mid": self.mid_value,
-                "idx": s["index"],
-                "vol": s['volume']["0"],
-                "name": s['properties']['application.name']
-            })
-        self.history.append(this_history)
+            idx = "%s" % s['index']
+            try:
+                sink_input = self.input_sink_samples[idx]
+                this_history.append({
+                    "min": sink_input['min'],
+                    "max": sink_input['max'],
+                    "avg": sink_input['avg'],
+                    "mid": sink_input['mid'],
+                    "idx": s["index"],
+                    "vol": s['volume']["0"],
+                    "name": s['properties']['application.name']
+                })
+            except KeyError, e:
+                print "KeyError:",e
+        if this_history:
+            self.history.append(this_history)
         if len(self.history) > self.target_history_len:
             self.history = self.history[1:]
         return
@@ -280,6 +434,19 @@ class VolumeAdjuster:
         self.total = 0
         self.min_value = 127
         self.max_value = 0
+        self.input_sink_samples = {}
+
+    def print_history(self):
+        print "["
+        # [{'name': 'fmp-pg.py', 'idx': 70, 'min': 40, 'vol': 97, 'max': 102, 'mid': 71, 'avg': 73}]
+        for i, h in enumerate(self.history):
+            for sink in h:
+                print "%3s:" % i,
+                for k, v in sink.iteritems():
+                    print "%s:%3s" % (k, v),
+                print ""
+        
+        print "]"
 
     def print_bar(self, adj, reason):
         bar_data = {}
@@ -322,7 +489,8 @@ class VolumeAdjuster:
         new_bar = new_bar[:max_pos-2] + ("%3d]" % self.max_value) + new_bar[max_pos+2:]
         new_bar = new_bar[:48] + "T" + new_bar[48:]
 
-        pprint.pprint(self.history)
+        self.print_history()
+        # pprint.pprint(self.history)
         print "nb [",new_bar,"]",
         if adj > 0:
             print "+%s" % adj,reason
@@ -408,7 +576,7 @@ class VolumeAdjuster:
     def adjust_volume(self, adj):
         if adj == 0:
             return
-
+        
         for s in self.sinks:
             vol = s['volume']['0']
             idx = s['index']
@@ -417,7 +585,14 @@ class VolumeAdjuster:
                 new_vol = int(self.convert_vol_to_k(vol))
                 exe = "pacmd set-sink-input-volume %s %s" % (idx, new_vol)
                 # print exe
-                if self.count >= METER_RATE and new_vol > 0:
+                try:
+                    input_sink_sample = self.input_sink_samples["%s" % idx]
+                except KeyError, e:
+                    print "KeyError:",e
+                    continue
+                print "input_sink_sample:", input_sink_sample
+                if self.count >= METER_RATE and new_vol > 0 and \
+                   input_sink_sample['min'] > 0:
                     subprocess.check_output(exe, shell=True)
 
 
@@ -427,7 +602,9 @@ def main():
     volume_adjuster = VolumeAdjuster(METER_RATE=METER_RATE)
     
     for sample in monitor:
-        volume_adjuster.process_sample(sample)
+        input_samples = monitor.get_sink_input_samples()
+        volume_adjuster.process_sample(sample, input_samples)
+        #  print "input_samples:", input_samples
         sys.stdout.flush()
         
 
