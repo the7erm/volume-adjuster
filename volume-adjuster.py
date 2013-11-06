@@ -227,6 +227,162 @@ class PeakMonitor(object):
             self._ques["%s" % index_incr].put(data[i] - 128)
         pa_stream_drop(stream)
 
+class LevelMonitorSink:
+    def __init__(self, context, rate, sink_input_info_p, monitor_source_name):
+        self.context = context
+        self.rate = rate
+        self.monitor_source_name = monitor_source_name
+        self.sink_input_info_p = sink_input_info_p
+        self.average = 0
+        self.total = 0
+        self.vol = 0
+        self.count = 0
+        self.min = 127
+        self.max = 0
+        self.history = []
+        self.max_history = 2
+        self.reset_history_samples = 10
+        self._stream_input_read_cb = pa_stream_request_cb_t(self.stream_input_read_cb)
+        self.setup_monitor()
+
+    def hard_reset(self):
+        self.total = 0
+        self.count = 0
+        self.average = 0
+        self.min = 127
+        self.max = 0
+
+    def stream_input_read_cb(self, stream, length, index_incr):
+        # print "stream:",stream
+        # print "index_incr:", index_incr
+        data = c_void_p()
+        pa_stream_peek(stream, data, c_ulong(length))
+        data = cast(data, POINTER(c_ubyte))
+        for i in xrange(length):
+            # When PA_SAMPLE_U8 is used, samples values range from 128
+            # to 255 because the underlying audio data is signed but
+            # it doesn't make sense to return signed peaks.
+            # self._samples.put(data[i] - 128)
+            # print "stream_input_read_cb:",data[i]  - 128
+            level = data[i] - 128
+            if level < self.min:
+                self.min = level
+            if level > self.max:
+                self.max = level
+            self.count += 1
+            self.total += level
+            if self.count > self.reset_history_samples:
+                self.append_history()
+
+        pa_stream_drop(stream)
+
+    def append_history(self):
+        self.average = sum(self.history) / len(self.history)
+        self.history.append({
+            "min": self.min,
+            "max": self.max,
+            "avg": self.avg
+        })
+        if len(self.history) > self.max_history:
+            self.history[1:] = self.history
+        self.hard_reset()
+        self.process_history()
+
+    def process_history(self):
+        min_cnt = 0
+        max_cnt = 0
+        silent_cnt = 0
+        too_loud_cnt = 0
+        too_soft_cnt = 0
+        extreamely_loud_count = 0
+        min_too_loud_cnt
+        for h in self.history:
+            if h['max'] >= 120:
+                too_loud_cnt += 1
+            if h['max'] >= 127:
+                extreamely_loud_count += 1
+
+            if h['max'] <= 30:
+                too_soft_cnt += 1
+
+            if h['max'] >= 110:
+                max_cnt += 1
+            if h['max'] <= 80:
+                min_cnt += 1
+
+            if h['min'] >= 80:
+                min_too_loud_cnt += 1
+
+            if h['max'] <= 20 and h['min'] == 0:
+                silent_cnt += 1
+        
+        if silent_cnt >= 1 or bad_cnt:
+            adj = 0
+            reason = "silent"
+            if too_loud_cnt >= 2:
+                adj = -3
+                reason = "it was silent and, way to loud"
+        else:
+            if max_cnt >= 1:
+                adj = -1
+                reason = "max_cnt:%s" % (max_cnt,)
+            if min_cnt >= 1:
+                adj = 1
+                reason = "min_cnt:%s" % min_cnt
+            if max_cnt == min_cnt:
+                adj = 0
+                reason = "equal parts"
+
+            if min_too_loud_cnt >= 2:
+                adj = -1
+                reason = "min too loud"
+
+            if too_loud_cnt >= 2:
+                adj = -4
+                reason = "Way too loud"
+
+            if extreamely_loud_count >= 2:
+                adj = -10
+                reason = "127 all the way"
+
+            if too_soft_cnt >= 2:
+                adj = 3
+                reason = "way to soft"
+
+        print "reason:",reason
+        self.adjust_volume(adj)
+
+    def setup_monitor(self):
+        sink_input_info = self.sink_input_info_p.contents
+        self.index = sink_input_info.index
+        self.application_name = sink_input_info.name
+        samplespec = pa_sample_spec()
+        samplespec.channels = 1
+        samplespec.format = PA_SAMPLE_U8
+        samplespec.rate = self.rate
+        pa_stream = pa_stream_new(context, "input-sink %s" % sink_input_info.name, samplespec, None)
+        pa_stream_set_monitor_stream(pa_stream, sink_input_info.index);
+        pa_stream_set_read_callback(pa_stream,
+                                    self._stream_input_read_cb,
+                                    sink_input_info.index,
+                                    None)
+
+        pa_stream_connect_record(pa_stream,
+                                 self.monitor_source_name,
+                                 None,
+                                 PA_STREAM_PEAK_DETECT)
+
+    def adjust_volume(self, adj):
+        if adj == 0:
+            return
+
+        vol = self.vol + adj
+        if vol < 150:
+            new_vol = int(self.convert_vol_to_k(vol))
+            exe = "pacmd set-sink-input-volume %s %s" % (self.index, new_vol)
+            print "exe:",exe
+            subprocess.check_output(exe, shell=True)
+
 
 class VolumeAdjuster:
     def __init__(self, METER_RATE=METER_RATE):
