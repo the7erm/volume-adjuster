@@ -34,7 +34,7 @@ class PeakMonitor(object):
         # that the Pulseaudio C API can call them
         self._context_notify_cb = pa_context_notify_cb_t(self.context_notify_cb)
         self._sink_info_cb = pa_sink_info_cb_t(self.sink_info_cb)\
-        
+
         self._stream_input_read_cb = pa_stream_request_cb_t(self.stream_input_read_cb)
 
         self._subscribe = pa_context_subscribe_cb_t(self.subscribe)
@@ -71,8 +71,6 @@ class PeakMonitor(object):
         PA_SUBSCRIPTION_EVENT_REMOVE = 32,        /**< An object was removed */
         PA_SUBSCRIPTION_EVENT_TYPE_MASK = 16+32"""
         print "event_type:", event_type, "idx:",idx
-        if event_type == 5:
-            print "vol?:", 65536.0 / idx
         if event_type in (5, 18, 37):
             return
         print "event_type:", event_type, "idx:",idx
