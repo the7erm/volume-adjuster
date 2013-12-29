@@ -206,12 +206,13 @@ class LevelMonitorSink:
         self.max = 0
         self.history = []
         self.level_history = []
+        self.long_history = []
         self.max_history = 2
+        self.long_history_length = 5
         self.reset_history_samples = 20
         self._samples = Queue()
         self._stream_input_read_cb = pa_stream_request_cb_t(self.stream_input_read_cb)
         self.setup_monitor()
-
 
     def hard_reset(self):
         self.total = 0
@@ -254,13 +255,41 @@ class LevelMonitorSink:
         self.history.append({
             "min": self.min,
             "max": self.max,
-            "avg": self.avg
+            "avg": self.avg,
+            "vol": self.vol
+        })
+        self.long_history.append({
+            "min": self.min,
+            "max": self.max,
+            "avg": self.avg,
+            "vol": self.vol
         })
         if len(self.history) > self.max_history:
             self.history = self.history[1:]
+        if len(self.long_history) > self.long_history_length:
+            self.long_history = self.long_history[1:]
+
         print self.name, "history:",self.history
+        print self.name, "self.level_history:",len(self.level_history), self.level_history
+        print self.name, "self.long_history:", self.long_history
         self.hard_reset()
         self.process_history()
+        self.long_history_has_changed()
+
+    def long_history_has_changed(self):
+        if len(self.long_history) < self.long_history_length:
+            return
+        for h1 in self.long_history:
+            for h2 in self.long_history:
+                if h1['min'] != h2['min'] or h1['max'] != h2['max']:
+                    print "LONG HISTORY HAS CHANGED"
+                    return True
+        print "*!"*60
+        print "LONG HISTORY HAS NOT CHANGED"
+        print "*!"*60
+        self.long_history = []
+        self.setup_monitor()
+        return False
 
     def process_history(self):
         min_cnt = 0
