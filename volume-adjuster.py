@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # A good portion of this script was taken from
 # http://freshfoo.com/blog/pulseaudio_monitoring
 import sys

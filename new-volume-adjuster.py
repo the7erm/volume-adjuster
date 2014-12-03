@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # A good portion of this script was taken from
 # http://freshfoo.com/blog/pulseaudio_monitoring
 import sys
@@ -11,6 +11,7 @@ import math
 import os
 import datetime
 import time
+import math
 # From https://github.com/Valodim/python-pulseaudio
 sys.path.append(os.path.join(sys.path[0], "python_pulseaudio", "pulseaudio"))
 from lib_pulseaudio import * 
@@ -19,9 +20,10 @@ from lib_pulseaudio import *
 # alsa_output.pci-0000_00_14.2.analog-stereo
 SINK_NAME = 'alsa_output.pci-0000_00_14.2.analog-stereo'
 # METER_RATE = 344
-METER_RATE = 20
+METER_RATE = 10
 MAX_SAMPLE_VALUE = 127
 DISPLAY_SCALE = 2
+MAX_VOLUME = 153
 MAX_SPACES = MAX_SAMPLE_VALUE >> DISPLAY_SCALE
 
 class PeakMonitor(object):
@@ -70,7 +72,7 @@ class PeakMonitor(object):
         PA_SUBSCRIPTION_EVENT_CHANGE = 16,        /**< A property of the object was modified */
         PA_SUBSCRIPTION_EVENT_REMOVE = 32,        /**< An object was removed */
         PA_SUBSCRIPTION_EVENT_TYPE_MASK = 16+32"""
-        print "event_type:", event_type, "idx:",idx
+        # print "event_type:", event_type, "idx:",idx
         if event_type in (5, 18, 37):
             return
         print "event_type:", event_type, "idx:",idx
@@ -87,7 +89,10 @@ class PeakMonitor(object):
                 print "event_type:", event_type.__repr__()
                 print "idx:", idx
                 # del self._ques["%s" % idx]
-                del self.input_sinks["%s" % idx]
+                try:
+                    del self.input_sinks["%s" % idx]
+                except KeyError:
+                    pass
 
     def subscribe_success(self, *args, **kwargs):
         print "subscribe_success", args
@@ -137,6 +142,23 @@ class PeakMonitor(object):
 
             self.monitor_source_name = sink_info.monitor_source_name
 
+            """
+            THIS IS HOW TO GET THE MAIN VOLUME
+            print "SINK_INFO:",sink_info
+            print "SINK_INFO.volume:", sink_info.volume
+            pprint.pprint((dir(sink_info.volume)))
+            print "sink_info.volume.values:", sink_info.volume.values
+            pprint.pprint(sink_info.volume.values)
+
+            print "sink_info.volume.channels:", sink_info.volume.channels
+            pprint.pprint((dir(sink_info.volume.channels)))
+            pprint.pprint(sink_info.volume.channels)
+            print "/ sink_info.volume.channels"
+
+            for val in sink_info.volume.values:
+                print "sink_info.volume.values VAL:", val
+            """
+
             pa_context_subscribe(
                 context, 
                 PA_SUBSCRIPTION_MASK_ALL, 
@@ -156,12 +178,21 @@ class PeakMonitor(object):
         print "="*60
         print "sink_input_info_p.contents.name:", sink_input_info_p.contents.name
         print "sink_input_info_p.contents.index:", sink_input_info_p.contents.index
-        
+        time.sleep(0.5)
+        name = sink_input_info_p.contents.name
+        if name == "Event Sound":
+            return
+        print "NAME:",name
         idx = sink_input_info_p.contents.index
+
         self.input_sinks["%s" % idx] = LevelMonitorSink(
             context, self.rate, sink_input_info_p, self.monitor_source_name
         )
         print "/"*60
+
+        print "-="*15, "SINK LIST","-="*15
+        
+        print self.input_sinks
 
 
     def stream_read_cb(self, stream, length, index_incr):
@@ -208,10 +239,28 @@ class LevelMonitorSink:
         self.level_history = []
         self.long_history = []
         self.max_history = 2
-        self.long_history_length = 5
-        self.reset_history_samples = 20
+        self.long_history_length = 10
+        self.reset_history_samples = METER_RATE
         self._samples = Queue()
-        self._stream_input_read_cb = pa_stream_request_cb_t(self.stream_input_read_cb)
+
+        print "sink_input_info_p:", sink_input_info_p
+        print "DIR sink_input_info_p:", 
+        pprint.pprint(dir(sink_input_info_p))
+        contents = sink_input_info_p.contents
+        print "contents:", sink_input_info_p.contents
+        # import pdb; pdb.set_trace()
+
+        for v in contents.volume.values:
+            print "VAL:", v
+
+        print "(int(contents.volume.values[0]) / 65536.0):", (int(contents.volume.values[0]) / 65536.0)
+
+        self.vol = int(math.ceil((int(contents.volume.values[0]) / 65536.0) * 100))
+        print "VOL:", self.vol
+
+        self._stream_input_read_cb = pa_stream_request_cb_t(
+            self.stream_input_read_cb)
+        print "monitor_source_name:", monitor_source_name
         self.setup_monitor()
 
     def hard_reset(self):
@@ -223,7 +272,10 @@ class LevelMonitorSink:
         self.level_history = []
 
     def stream_input_read_cb(self, stream, length, index_incr):
-
+        if self.name == 'Event Sound':
+            print "EVENT SOUND"
+            return
+        # print self.name
         # print "index_incr:", index_incr
         data = c_void_p()
         pa_stream_peek(stream, data, c_ulong(length))
@@ -247,10 +299,54 @@ class LevelMonitorSink:
         self.level_history.append(level)
        
         if self.count > self.reset_history_samples:
-            print "#"*30,self.name,"#"*30,"%s" % datetime.datetime.now()
+            print "#"*30, self.name, "#"*30,"%s" % datetime.datetime.now()
             self.append_history()
 
+    def set_bar_value(self, bar_data, val, fmt):
+        pos = str(val / 2)
+        bar_data[pos] += [fmt % val]
+
+    def print_bar(self, history):
+        if self.name == 'Event Sound':
+            print "EVENT SOUND"
+            return
+        bar_data = {}
+        for i in range(-1, 200):
+            if self.count >= METER_RATE:
+                bar_data[str(i)] = ["-"]
+            else:
+                bar_data[str(i)] = [" "]
+
+        self.set_bar_value(bar_data, history['min'], '[%3d')
+        self.set_bar_value(bar_data, history['avg'], '%3da')
+        self.set_bar_value(bar_data, history['max'], '%3d]')
+        self.set_bar_value(bar_data, history['vol'], '%3d@')
+
+        
+        new_bar = "-"*90
+        new_bar2 = "-"*90
+        new_bar = new_bar[:48] + "T" + new_bar[48:]
+        new_bar2 = new_bar[:48] + "T" + new_bar2[48:]
+        min_pos = int(history['min'] / 2) + 2
+        new_bar = new_bar[:min_pos-2] + ("[%3d" % history['min'] ) + new_bar[min_pos+2:]
+        avg_pos = int(history['avg'] / 2) + 2
+        new_bar = new_bar[:avg_pos-2] + ("%3da" % history['avg'] ) + new_bar[avg_pos+2:]
+
+        max_pos = int(history['max']/2) + 2
+        new_bar = new_bar[:max_pos-2] + ("%3d]" % history['max'] ) + new_bar[max_pos+2:]
+
+        vol_pos = int(history['vol']/2) + 2
+        new_bar2 = new_bar2[:vol_pos-2] + ("%3d@" % history['vol'] ) + new_bar2[vol_pos+2:]
+
+        # self.print_history()
+        # pprint.pprint(self.history)
+        print self.name, " [",new_bar,"]"
+        print self.name, " [",new_bar2,"]"
+
+
     def append_history(self):
+        if self.name == 'Event Sound':
+            return
         self.avg = sum(self.level_history) / len(self.level_history)
         self.history.append({
             "min": self.min,
@@ -269,13 +365,23 @@ class LevelMonitorSink:
         if len(self.long_history) > self.long_history_length:
             self.long_history = self.long_history[1:]
 
-        print self.name, "history:",self.history
+        print self.name, "history:", pprint.pformat(self.history)
+        
         print self.name, "self.level_history:",len(self.level_history), self.level_history
         print self.name, "self.long_history:", self.long_history
+        
         self.hard_reset()
         self.process_history()
         self.long_history_has_changed()
+        for h in self.long_history:
+            self.print_bar(h)
 
+        if self.name == "Playback Stream":
+            print "re-setting monitor"
+            self.name = self.sink_input_info_p.contents.name
+            # self.sink_input_info_p = sink_input_info_p
+            # self.name = sink_input_info_p.contents.name
+            
     def long_history_has_changed(self):
         if len(self.long_history) < self.long_history_length:
             return
@@ -365,7 +471,8 @@ class LevelMonitorSink:
         samplespec.channels = 1
         samplespec.format = PA_SAMPLE_U8
         samplespec.rate = self.rate
-        pa_stream = pa_stream_new(self.context, "input-sink %s" % sink_input_info.name, samplespec, None)
+        pa_stream = pa_stream_new(self.context, "input-sink %s" % 
+            sink_input_info.name, samplespec, None)
         pa_stream_set_monitor_stream(pa_stream, sink_input_info.index);
         pa_stream_set_read_callback(pa_stream,
                                     self._stream_input_read_cb,
@@ -382,7 +489,10 @@ class LevelMonitorSink:
             return
 
         vol = self.vol + adj
-        if vol < 150:
+        if vol > MAX_VOLUME and self.vol != MAX_VOLUME:
+            vol = MAX_VOLUME
+
+        if vol <= MAX_VOLUME:
             print "adj:",adj
             new_vol = int(self.convert_vol_to_k(vol))
             exe = "pacmd set-sink-input-volume %s %s" % (self.index, new_vol)
