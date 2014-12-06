@@ -140,6 +140,7 @@ class PeakMonitor(object):
             print "!"*100
             print "PA_SUBSCRIPTION_EVENT_SINK_INPUT"
             print_mask_type(facility_mask)
+            print_mask_type(event_mask)
             if event_mask == PA_SUBSCRIPTION_EVENT_NEW:
                 print "+"*100
                 print "NEW SINK", idx
