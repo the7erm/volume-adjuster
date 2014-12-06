@@ -66,8 +66,8 @@ def print_mask_type(mask):
     if mask == PA_SUBSCRIPTION_EVENT_CHANGE:
         print "PA_SUBSCRIPTION_EVENT_CHANGE",
 
-    #if mask == PA_SUBSCRIPTION_EVENT_REMOVE:
-    #    print "PA_SUBSCRIPTION_EVENT_REMOVE",
+    if mask == PA_SUBSCRIPTION_EVENT_REMOVE:
+        print "PA_SUBSCRIPTION_EVENT_REMOVE",
 
     print
 
