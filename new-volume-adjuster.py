@@ -26,21 +26,70 @@ DISPLAY_SCALE = 2
 MAX_VOLUME = 153
 MAX_SPACES = MAX_SAMPLE_VALUE >> DISPLAY_SCALE
 
+
+def print_mask_type(mask):
+    print "mask:",mask, 
+    
+    if mask == PA_SUBSCRIPTION_EVENT_SINK:
+        print "PA_SUBSCRIPTION_EVENT_SINK",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_SOURCE:
+        print "PA_SUBSCRIPTION_EVENT_SOURCE",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_SINK_INPUT:
+        print "PA_SUBSCRIPTION_EVENT_SINK_INPUT",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_SOURCE_OUTPUT:
+        print "PA_SUBSCRIPTION_EVENT_SOURCE_OUTPUT",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_MODULE:
+        print "PA_SUBSCRIPTION_EVENT_MODULE",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_CLIENT:
+        print "PA_SUBSCRIPTION_EVENT_CLIENT",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_SAMPLE_CACHE:
+        print "PA_SUBSCRIPTION_EVENT_SAMPLE_CACHE",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_SERVER:
+        print "PA_SUBSCRIPTION_EVENT_SERVER",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_AUTOLOAD:
+        print "PA_SUBSCRIPTION_EVENT_AUTOLOAD",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_FACILITY_MASK:
+        print "PA_SUBSCRIPTION_EVENT_FACILITY_MASK",
+
+    if mask == PA_SUBSCRIPTION_EVENT_NEW:
+        print "PA_SUBSCRIPTION_EVENT_NEW",
+    
+    if mask == PA_SUBSCRIPTION_EVENT_CHANGE:
+        print "PA_SUBSCRIPTION_EVENT_CHANGE",
+
+    #if mask == PA_SUBSCRIPTION_EVENT_REMOVE:
+    #    print "PA_SUBSCRIPTION_EVENT_REMOVE",
+
+    print
+
 class PeakMonitor(object):
 
     def __init__(self, sink_name, rate):
         self.sink_name = sink_name
         self.rate = rate
+        self.sinks = {}
         self.input_sinks = {}
         # Wrap callback methods in appropriate ctypefunc instances so
         # that the Pulseaudio C API can call them
-        self._context_notify_cb = pa_context_notify_cb_t(self.context_notify_cb)
-        self._sink_info_cb = pa_sink_info_cb_t(self.sink_info_cb)\
 
-        self._stream_input_read_cb = pa_stream_request_cb_t(self.stream_input_read_cb)
+        self._context_notify_cb = pa_context_notify_cb_t(self.context_notify_cb)
+        self._sink_info_cb = pa_sink_info_cb_t(self.sink_info_cb)
+
+        self._stream_input_read_cb = pa_stream_request_cb_t(
+            self.stream_input_read_cb)
 
         self._subscribe = pa_context_subscribe_cb_t(self.subscribe)
-        self._subscribe_success = pa_context_success_cb_t(self.subscribe_success)
+        self._subscribe_success = pa_context_success_cb_t(
+            self.subscribe_success)
 
         # stream_read_cb() puts peak samples into this Queue instance
         self._samples = Queue()
@@ -72,19 +121,29 @@ class PeakMonitor(object):
         PA_SUBSCRIPTION_EVENT_CHANGE = 16,        /**< A property of the object was modified */
         PA_SUBSCRIPTION_EVENT_REMOVE = 32,        /**< An object was removed */
         PA_SUBSCRIPTION_EVENT_TYPE_MASK = 16+32"""
-        # print "event_type:", event_type, "idx:",idx
+        print "event_type:", event_type, "idx:",idx
+        facility_mask = event_type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK
+        print "facility_mask:", facility_mask, "event_type:", event_type,
+        print "idx:",idx
+        print_mask_type(facility_mask)
+        event_mask = event_type & PA_SUBSCRIPTION_EVENT_TYPE_MASK
+        print "event_mask:", event_mask, "event_type:", event_type, "idx:",idx
+        print_mask_type(event_mask)
+
+
+
         if event_type in (5, 18, 37):
             return
         print "event_type:", event_type, "idx:",idx
-        if (event_type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) == PA_SUBSCRIPTION_EVENT_SINK_INPUT:
-            mask = event_type & PA_SUBSCRIPTION_EVENT_TYPE_MASK
-            if mask == PA_SUBSCRIPTION_EVENT_NEW:
+
+        if facility_mask == PA_SUBSCRIPTION_EVENT_SINK_INPUT:
+            if facility_mask == PA_SUBSCRIPTION_EVENT_NEW:
                 print "NEW SINK",idx
                 # self._ques["%s" % idx] = Queue()
                 o = pa_context_get_sink_input_info(context, idx, self._sink_input_info_cb, None)
                 pa_operation_unref(o)
 
-            if mask == PA_SUBSCRIPTION_EVENT_REMOVE:
+            if facility_mask == PA_SUBSCRIPTION_EVENT_REMOVE:
                 print "REMOVE SINK", idx
                 print "event_type:", event_type.__repr__()
                 print "idx:", idx
@@ -106,7 +165,8 @@ class PeakMonitor(object):
             # be called with information about the available sinks.
             o = pa_context_get_sink_info_list(context, self._sink_info_cb, None)
             pa_operation_unref(o)
-            self._sink_input_info_cb = pa_sink_input_info_cb_t(self.sink_input_info_cb)
+            self._sink_input_info_cb = pa_sink_input_info_cb_t(
+                self.sink_input_info_cb)
 
         elif state == PA_CONTEXT_FAILED :
             print "Connection failed"
@@ -117,6 +177,7 @@ class PeakMonitor(object):
     def sink_info_cb(self, context, sink_info_p, _, __):
         print "sink_info_p:",sink_info_p
         if not sink_info_p:
+            print "NO sink_info_p"
             return
 
         sink_info = sink_info_p.contents
@@ -158,6 +219,9 @@ class PeakMonitor(object):
             for val in sink_info.volume.values:
                 print "sink_info.volume.values VAL:", val
             """
+            print "SINK_INFO"
+            dir_r(sink_info)
+            # import pdb; pdb.set_trace()
 
             pa_context_subscribe(
                 context, 
@@ -172,7 +236,7 @@ class PeakMonitor(object):
     def sink_input_info_cb(self, context, sink_input_info_p, _, __):
         print "*"*60
         if not sink_input_info_p:
-            print "none", sink_input_info_p
+            print "NONE", sink_input_info_p
             print "/"*60
             return
         print "="*60
@@ -182,7 +246,7 @@ class PeakMonitor(object):
         name = sink_input_info_p.contents.name
         if name == "Event Sound":
             return
-        print "NAME:",name
+        print "NAME:", name
         idx = sink_input_info_p.contents.index
 
         self.input_sinks["%s" % idx] = LevelMonitorSink(
@@ -222,6 +286,12 @@ class PeakMonitor(object):
             self._ques["%s" % index_incr].put(data[i] - 128)
         pa_stream_drop(stream)
 
+print_r = pprint.pprint
+def dir_r(obj):
+    print_r(dir(obj))
+    print "type:",type(obj)
+    print "obj:", obj
+
 class LevelMonitorSink:
     def __init__(self, context, rate, sink_input_info_p, monitor_source_name):
         self.context = context
@@ -248,6 +318,7 @@ class LevelMonitorSink:
         pprint.pprint(dir(sink_input_info_p))
         contents = sink_input_info_p.contents
         print "contents:", sink_input_info_p.contents
+
         # import pdb; pdb.set_trace()
 
         for v in contents.volume.values:
