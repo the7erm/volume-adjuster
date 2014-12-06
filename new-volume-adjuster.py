@@ -12,6 +12,8 @@ import os
 import datetime
 import time
 import math
+import gtk
+from copy import deepcopy
 # From https://github.com/Valodim/python-pulseaudio
 sys.path.append(os.path.join(sys.path[0], "python_pulseaudio", "pulseaudio"))
 from lib_pulseaudio import * 
@@ -26,6 +28,160 @@ DISPLAY_SCALE = 2
 MAX_VOLUME = 153
 MAX_SPACES = MAX_SAMPLE_VALUE >> DISPLAY_SCALE
 
+def wait():
+    # print "leave1"
+    gtk.gdk.threads_leave()
+    # print "/leave1"
+    # print "enter"
+    gtk.gdk.threads_enter()
+    # print "/enter"
+    if gtk.events_pending():
+        while gtk.events_pending():
+            # print "pending:"
+            gtk.main_iteration(False)
+    # print "leave"
+    gtk.gdk.threads_leave()
+
+window = gtk.Window()
+drawing_area = gtk.DrawingArea()
+window.add(drawing_area)
+
+black = gtk.gdk.color_parse("#000")
+red = gtk.gdk.color_parse("#F00")
+green = gtk.gdk.color_parse("#0F0")
+blue = gtk.gdk.color_parse("#00F")
+white = gtk.gdk.color_parse("#FFF")
+
+global cr, widget
+cr = None
+_widget = None
+
+def expose(widget, event):
+    global _widget
+    _widget = widget
+    cr = _widget.window.cairo_create()
+    cr.set_source_rgb(1.0, 1.0, 1.0)
+
+    width, height = window.get_size()
+    cr.rectangle(1, 1, width, height)
+    cr.fill()
+    return
+
+def invert(num, _max, height):
+   
+    percent = (num / _max)
+    inverse = (1.0 - percent)
+    res = inverse * height
+
+     # print "--"
+    # print "num:", num
+    # print "max:", _max
+    # print "height:", height
+    # print "percent:", percent
+    # print "res:", res
+    # print "inverse:", inverse
+    return int(res)
+
+def draw_history(history):
+    global _widget
+    if _widget is None or _widget.window is None:
+        return
+    print "_widget.window.height", window.get_size()
+    print "HISTORY:", history
+    cr = _widget.window.cairo_create()
+    # cr.set_source_rgb(1.0, 1.0, 1.0)
+
+    width, height = window.get_size()
+    # cr.rectangle(1, 1, width, height)
+    # cr.fill()
+
+    max_value = 154.0
+    part_width = width / 10.0
+
+    reverse_history = deepcopy(history)
+    reverse_history.reverse()
+    idx = width
+    half = height * 0.5
+    for i, el in enumerate(reverse_history):
+        x = idx - part_width
+        idx = idx - part_width
+        _max = invert(el['max'], max_value, height)
+        _avg = invert(el['avg'], max_value, height)
+        _min = invert(el['min'], max_value, height)
+        vol = invert(el['vol'], max_value, height)
+
+        cr.set_source_rgb(0.0, 0.0, 0.0)
+        cr.rectangle(x, vol, part_width, 3)
+        cr.fill()
+
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.rectangle(x, half, part_width, 2)
+        cr.fill()
+
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.rectangle(x, 0, part_width, _max)
+        cr.fill()
+
+        cr.set_source_rgb(0.0, 0.0, 0.0)
+        cr.rectangle(x, vol, part_width, 3)
+        cr.fill()
+
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.rectangle(x, half, part_width, 2)
+        cr.fill()
+
+        cr.set_source_rgb(1.0, 0.0, 0.0)
+        cr.rectangle(x, _max, part_width, height - _max - (height - _avg))
+        cr.fill()
+        
+        cr.set_source_rgb(0.0, 0.0, 0.0)
+        cr.rectangle(x, vol, part_width, 3)
+        cr.fill()
+
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.rectangle(x, half, part_width, 2)
+        cr.fill()
+
+        cr.set_source_rgb(0.0, 1.0, 0.0)
+        cr.rectangle(x, _avg, part_width, height - _avg - (height - _min))
+        cr.fill()
+
+        cr.set_source_rgb(0.0, 0.0, 0.0)
+        cr.rectangle(x, vol, part_width, 3)
+        cr.fill()
+
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.rectangle(x, half, part_width, 2)
+        cr.fill()
+
+        cr.set_source_rgb(0.0, 0.0, 1.0)
+        cr.rectangle(x, _min, part_width, height - _min)
+        cr.fill()
+
+        cr.set_source_rgb(0.0, 0.0, 0.0)
+        cr.rectangle(x, vol, part_width, 3)
+        cr.fill()
+
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.rectangle(x, half, part_width, 2)
+        cr.fill()
+        wait()
+        # {'vol': 94, 'max': 103, 'avg': 90, 'min': 76}
+   
+   
+    # def draw_rectangle(gc, filled, x, y, width, height)
+    # cr.rectangle(180, 20, 80, 80)
+    
+    wait()
+
+drawing_area.connect("expose-event", expose)
+
+
+
+
+# drawing_area.draw_rectangle(gc, filled, x, y, width, height)
+window.show_all()
+wait()
 
 def print_mask_type(mask):
     print "mask:",mask, 
@@ -387,6 +543,7 @@ class LevelMonitorSink:
         if self.name == 'Event Sound':
             print "EVENT SOUND"
             return
+        draw_history(self.long_history)
         bar_data = {}
         for i in range(-1, 200):
             if self.count >= METER_RATE:
