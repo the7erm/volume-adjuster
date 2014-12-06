@@ -122,28 +122,33 @@ class PeakMonitor(object):
         PA_SUBSCRIPTION_EVENT_REMOVE = 32,        /**< An object was removed */
         PA_SUBSCRIPTION_EVENT_TYPE_MASK = 16+32"""
         print "event_type:", event_type, "idx:",idx
-        facility_mask = event_type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK
+        facility_mask = (event_type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK)
         print "facility_mask:", facility_mask, "event_type:", event_type,
         print "idx:",idx
         print_mask_type(facility_mask)
-        event_mask = event_type & PA_SUBSCRIPTION_EVENT_TYPE_MASK
+        event_mask = (event_type & PA_SUBSCRIPTION_EVENT_TYPE_MASK)
         print "event_mask:", event_mask, "event_type:", event_type, "idx:",idx
         print_mask_type(event_mask)
-
-
 
         if event_type in (5, 18, 37):
             return
         print "event_type:", event_type, "idx:",idx
+        print "equal test", (event_type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) == facility_mask
+
 
         if facility_mask == PA_SUBSCRIPTION_EVENT_SINK_INPUT:
-            if facility_mask == PA_SUBSCRIPTION_EVENT_NEW:
-                print "NEW SINK",idx
+            print "!"*100
+            print "PA_SUBSCRIPTION_EVENT_SINK_INPUT"
+            print_mask_type(facility_mask)
+            if event_mask == PA_SUBSCRIPTION_EVENT_NEW:
+                print "+"*100
+                print "NEW SINK", idx
                 # self._ques["%s" % idx] = Queue()
                 o = pa_context_get_sink_input_info(context, idx, self._sink_input_info_cb, None)
                 pa_operation_unref(o)
 
-            if facility_mask == PA_SUBSCRIPTION_EVENT_REMOVE:
+            if event_mask == PA_SUBSCRIPTION_EVENT_REMOVE:
+                print "-"*100
                 print "REMOVE SINK", idx
                 print "event_type:", event_type.__repr__()
                 print "idx:", idx
@@ -566,6 +571,8 @@ class LevelMonitorSink:
         if vol <= MAX_VOLUME:
             print "adj:",adj
             new_vol = int(self.convert_vol_to_k(vol))
+            if new_vol < 0:
+                return
             exe = "pacmd set-sink-input-volume %s %s" % (self.index, new_vol)
             print "exe:",exe
             subprocess.check_output(exe, shell=True)
