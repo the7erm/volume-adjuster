@@ -83,6 +83,42 @@ def invert(num, _max, height):
     # print "inverse:", inverse
     return int(res)
 
+def d(*args):
+    res = []
+    for val in args:
+        res.append(int(val) / 255.0)
+    return res
+
+
+def high(cr):
+    cr.set_source_rgb(*d(69, 81, 185))
+
+def avg(cr):
+    cr.set_source_rgb(*d(8, 18, 109))
+
+def low(cr):
+    cr.set_source_rgb(*d(4, 10, 58))
+
+def black(cr):
+    cr.set_source_rgb(0.0, 0.0, 0.0)
+
+def white(cr):
+    cr.set_source_rgb(1.0, 1.0, 1.0)
+
+def light_grey(cr):
+    cr.set_source_rgb(0.5, 0.5, 0.5)
+
+def draw_lines(cr, x, vol, part_width, half):
+
+    black(cr)
+    cr.rectangle(x, vol, part_width, 3)
+    cr.fill()
+
+    white(cr)
+    cr.rectangle(x, half, part_width, 2)
+    cr.fill()
+
+
 def draw_history(history):
     global _widget
     if _widget is None or _widget.window is None:
@@ -111,64 +147,36 @@ def draw_history(history):
         _min = invert(el['min'], max_value, height)
         vol = invert(el['vol'], max_value, height)
 
-        cr.set_source_rgb(0.0, 0.0, 0.0)
-        cr.rectangle(x, vol, part_width, 3)
-        cr.fill()
+        # draw_lines(cr, x, vol, part_width, half)
+        print "x:",int(x), _max, part_width, height - _max - (height - _avg)
 
-        cr.set_source_rgb(1.0, 1.0, 1.0)
-        cr.rectangle(x, half, part_width, 2)
-        cr.fill()
+        draw_lines(cr, x, vol, part_width, half)
 
-        cr.set_source_rgb(1.0, 1.0, 1.0)
+        white(cr)
         cr.rectangle(x, 0, part_width, _max)
         cr.fill()
 
-        cr.set_source_rgb(0.0, 0.0, 0.0)
-        cr.rectangle(x, vol, part_width, 3)
-        cr.fill()
+        draw_lines(cr, x, vol, part_width, half)
 
-        cr.set_source_rgb(1.0, 1.0, 1.0)
-        cr.rectangle(x, half, part_width, 2)
-        cr.fill()
-
-        cr.set_source_rgb(1.0, 0.0, 0.0)
+        high(cr)
         cr.rectangle(x, _max, part_width, height - _max - (height - _avg))
         cr.fill()
         
-        cr.set_source_rgb(0.0, 0.0, 0.0)
-        cr.rectangle(x, vol, part_width, 3)
-        cr.fill()
+        draw_lines(cr, x, vol, part_width, half)
 
-        cr.set_source_rgb(1.0, 1.0, 1.0)
-        cr.rectangle(x, half, part_width, 2)
-        cr.fill()
-
-        cr.set_source_rgb(0.0, 1.0, 0.0)
+        avg(cr)
         cr.rectangle(x, _avg, part_width, height - _avg - (height - _min))
         cr.fill()
 
-        cr.set_source_rgb(0.0, 0.0, 0.0)
-        cr.rectangle(x, vol, part_width, 3)
-        cr.fill()
+        draw_lines(cr, x, vol, part_width, half)
 
-        cr.set_source_rgb(1.0, 1.0, 1.0)
-        cr.rectangle(x, half, part_width, 2)
-        cr.fill()
-
-        cr.set_source_rgb(0.0, 0.0, 1.0)
+        low(cr)
         cr.rectangle(x, _min, part_width, height - _min)
         cr.fill()
 
-        cr.set_source_rgb(0.0, 0.0, 0.0)
-        cr.rectangle(x, vol, part_width, 3)
-        cr.fill()
+        draw_lines(cr, x, vol, part_width, half)
 
-        cr.set_source_rgb(1.0, 1.0, 1.0)
-        cr.rectangle(x, half, part_width, 2)
-        cr.fill()
         wait()
-        # {'vol': 94, 'max': 103, 'avg': 90, 'min': 76}
-   
    
     # def draw_rectangle(gc, filled, x, y, width, height)
     # cr.rectangle(180, 20, 80, 80)
