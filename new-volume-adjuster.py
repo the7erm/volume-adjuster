@@ -13,6 +13,7 @@ import datetime
 import time
 import math
 import gtk
+import cairo
 from copy import deepcopy
 # From https://github.com/Valodim/python-pulseaudio
 sys.path.append(os.path.join(sys.path[0], "python_pulseaudio", "pulseaudio"))
@@ -543,7 +544,11 @@ class LevelMonitorSink:
         if self.name == 'Event Sound':
             print "EVENT SOUND"
             return
-        draw_history(self.long_history)
+        try:
+            draw_history(self.long_history)
+        except cairo.Error:
+            pass
+
         bar_data = {}
         for i in range(-1, 200):
             if self.count >= METER_RATE:
