@@ -128,13 +128,16 @@ def draw_history(history):
     cr = _widget.window.cairo_create()
     width, height = window.get_size()
 
-    cr.set_source_rgb(1.0, 1.0, 1.0)
-
-    cr.rectangle(1, 1, width, height)
-    cr.fill()
-
     max_value = 154.0
     part_width = width / 10.0
+
+    while len(history) < 10:
+        history.insert(0, {
+            "avg": 0,
+            "min": 0,
+            "vol": 0,
+            "max": 0
+        })
 
     reverse_history = deepcopy(history)
     reverse_history.reverse()
@@ -142,30 +145,96 @@ def draw_history(history):
         'max': d(69, 81, 185),
         'avg': d(8, 18, 109),
         'min': d(4, 10, 58),
+        'white': d(255, 255, 255),
+        'black': d(0, 0, 0)
     }
     keys = ['max', 'avg', 'min']
-    for k in keys:
+    for i, k in enumerate(keys):
         idx = width
         half = height * 0.5
         x1 = width
         last_el = None
+
         start_vol = invert(reverse_history[0][k], max_value, height)
         cr.set_source_rgb(*colors[k])
         cr.move_to(idx, start_vol)
         cr.line_to(idx, start_vol)
-        for i, el in enumerate(reverse_history):
+        
+        for el in reverse_history:
             idx = idx - part_width
             vol = invert(el[k], max_value, height)
             cr.line_to(idx, vol)
+        # now we work forward with the next element
         cr.line_to(0, vol)
-        cr.line_to(0, height)
-        cr.line_to(width, height)
-        cr.line_to(width, start_vol)
+
+        if i != len(keys) - 1:
+            k2 = keys[i+1]
+            print "k2:",k2
+            start_vol = invert(history[0][k2], max_value, height)
+            cr.line_to(0, start_vol)
+            idx = 0
+            for el in history:
+                vol = invert(el[k2], max_value, height)
+                cr.line_to(idx, vol)
+                idx = idx + part_width
+            cr.line_to(width, vol)
+            cr.line_to(width, start_vol)
+            
+
+        else:
+            cr.line_to(0, vol)
+            cr.line_to(0, height)
+            cr.line_to(width, height)
+            cr.line_to(width, start_vol)
         cr.set_line_width(2)
         cr.close_path()
         cr.fill()
         cr.stroke()
-        wait()
+
+        idx = width
+        k = 'vol'
+        start_vol = invert(reverse_history[0][k], max_value, height)
+        cr.set_source_rgb(*colors['black'])
+        cr.move_to(idx, start_vol)
+        for el in reverse_history:
+            idx = idx - part_width
+            vol = invert(el[k], max_value, height)
+            
+            cr.line_to(idx, vol)
+        cr.stroke()
+
+        if i == 0:
+            idx = width
+            k = 'max'
+            start_vol = invert(reverse_history[0][k], max_value, height)
+            cr.set_source_rgb(*colors['white'])
+            cr.move_to(idx, start_vol)
+            cr.line_to(idx, start_vol)
+            for el in reverse_history:
+                idx = idx - part_width
+                vol = invert(el[k], max_value, height)
+                
+                cr.line_to(idx, vol)
+            cr.line_to(0, vol)
+            cr.line_to(0, 0)
+            cr.line_to(width, 0)
+            cr.line_to(width, start_vol)
+            cr.close_path()
+            cr.fill()
+            cr.stroke()
+
+    idx = width
+    k = 'vol'
+    start_vol = invert(reverse_history[0][k], max_value, height)
+    cr.set_source_rgb(*colors['black'])
+    cr.move_to(idx, start_vol)
+    for el in reverse_history:
+        idx = idx - part_width
+        vol = invert(el[k], max_value, height)
+        
+        cr.line_to(idx, vol)
+
+    cr.stroke()
     wait()
     return
     # cr.stroke()
