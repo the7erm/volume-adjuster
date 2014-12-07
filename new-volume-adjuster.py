@@ -110,9 +110,9 @@ def light_grey(cr):
 
 def draw_lines(cr, x, vol, part_width, half):
 
-    black(cr)
-    cr.rectangle(x, vol, part_width, 3)
-    cr.fill()
+    # black(cr)
+    # cr.rectangle(x, vol, part_width, 3)
+    # cr.fill()
 
     white(cr)
     cr.rectangle(x, half, part_width, 2)
@@ -126,26 +126,85 @@ def draw_history(history):
     print "_widget.window.height", window.get_size()
     print "HISTORY:", history
     cr = _widget.window.cairo_create()
-    # cr.set_source_rgb(1.0, 1.0, 1.0)
-
     width, height = window.get_size()
-    # cr.rectangle(1, 1, width, height)
-    # cr.fill()
+
+    cr.set_source_rgb(1.0, 1.0, 1.0)
+
+    cr.rectangle(1, 1, width, height)
+    cr.fill()
 
     max_value = 154.0
     part_width = width / 10.0
 
     reverse_history = deepcopy(history)
     reverse_history.reverse()
-    idx = width
-    half = height * 0.5
+    colors = {
+        'max': d(69, 81, 185),
+        'avg': d(8, 18, 109),
+        'min': d(4, 10, 58),
+    }
+    keys = ['max', 'avg', 'min']
+    for k in keys:
+        idx = width
+        half = height * 0.5
+        x1 = width
+        last_el = None
+        start_vol = invert(reverse_history[0][k], max_value, height)
+        cr.set_source_rgb(*colors[k])
+        cr.move_to(idx, start_vol)
+        cr.line_to(idx, start_vol)
+        for i, el in enumerate(reverse_history):
+            idx = idx - part_width
+            vol = invert(el[k], max_value, height)
+            cr.line_to(idx, vol)
+        cr.line_to(0, vol)
+        cr.line_to(0, height)
+        cr.line_to(width, height)
+        cr.line_to(width, start_vol)
+        cr.set_line_width(2)
+        cr.close_path()
+        cr.fill()
+        cr.stroke()
+        wait()
+    wait()
+    return
+    # cr.stroke()
     for i, el in enumerate(reverse_history):
-        x = idx - part_width
-        idx = idx - part_width
+        vol = invert(el['vol'], max_value, height)
         _max = invert(el['max'], max_value, height)
         _avg = invert(el['avg'], max_value, height)
         _min = invert(el['min'], max_value, height)
-        vol = invert(el['vol'], max_value, height)
+        x = idx - part_width
+        idx = idx - part_width
+        cr.set_source_rgb(1, 0, 0)
+        cr.rel_line_to(x + part_width, vol)
+        cr.set_line_width(2)
+        # cr.stroke()
+        last_el = el
+        wait()
+        continue
+
+        print "x, vol:", x, vol
+        if i > 0:
+            x1 = idx
+            x2 = idx - part_width
+            y1 = vol
+            y2 = invert(last_el['vol'], max_value, height)
+            black(cr)
+            cr.line_to(x, y2)
+            
+            cr.set_line_width(0.2)
+            cr.stroke()
+        else:
+            black(cr)
+            cr.move_to(x, vol)
+            cr.set_line_width(0.2)
+            cr.stroke()
+
+        last_el = el
+        continue
+        
+
 
         # draw_lines(cr, x, vol, part_width, half)
         print "x:",int(x), _max, part_width, height - _max - (height - _avg)
@@ -176,11 +235,14 @@ def draw_history(history):
 
         draw_lines(cr, x, vol, part_width, half)
 
+        
+
         wait()
    
     # def draw_rectangle(gc, filled, x, y, width, height)
     # cr.rectangle(180, 20, 80, 80)
-    
+    cr.line_to(0, vol)
+    cr.stroke()
     wait()
 
 drawing_area.connect("expose-event", expose)
