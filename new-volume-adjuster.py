@@ -704,11 +704,12 @@ class LevelMonitorSink:
         for h1 in self.long_history:
             for h2 in self.long_history:
                 if h1['min'] != h2['min'] or h1['max'] != h2['max']:
-                    print "LONG HISTORY HAS CHANGED"
+                    # print "LONG HISTORY HAS CHANGED"
                     return True
         print "*!"*60
         print "LONG HISTORY HAS NOT CHANGED"
         print "*!"*60
+        return False
         self.long_history = []
         self.setup_monitor()
         return False
