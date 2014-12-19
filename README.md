@@ -19,6 +19,7 @@ If it doesn't work run `pavucontrol` and look at the settings make sure everythi
 
 #### Graph
 ![graph](https://cloud.githubusercontent.com/assets/2530157/5500637/ee5681b2-8705-11e4-82ff-45f1772fce55.png)
+
 The graph shows the last 10 seconds of activity.  If you don't like it just close it.  It won't show up until you restart the program.
 
 The dotted line is a reference point for "100%" in pulse audio.  The solid black line is the volume (you can open `pavucontrol` and watch it in action via the playback tab.)
