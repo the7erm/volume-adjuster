@@ -429,7 +429,7 @@ class PeakMonitor(object):
         print "sink_info.name:", sink_info.name
         print "self.sink_name:", self.sink_name
 
-        if sink_info.name == self.sink_name:
+        if 'alsa_output' in sink_info.name:
 
             # Found the sink we want to monitor for peak levels.
             # Tell PA to call stream_read_cb with peak samples.
