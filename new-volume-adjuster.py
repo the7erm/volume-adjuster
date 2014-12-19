@@ -243,7 +243,7 @@ def draw_history(history):
     factor = max_value / 154.0
     one_hundred_pos = factor * 100
     _pos = invert(one_hundred_pos, max_value, height)
-    print "_pos:", _pos
+    # print "_pos:", _pos
     cr.set_line_width(1)
     cr.set_dash([20, 20])
     cr.move_to(0, _pos)
@@ -710,9 +710,9 @@ class LevelMonitorSink:
         print "LONG HISTORY HAS NOT CHANGED"
         print "*!"*60
         return False
-        self.long_history = []
-        self.setup_monitor()
-        return False
+        # self.long_history = []
+        # self.setup_monitor()
+        # return False
 
     def process_history(self):
         min_cnt = 0
@@ -725,8 +725,16 @@ class LevelMonitorSink:
         bad_cnt = 0
         adj = 0
         for h in self.history:
+            if h['avg'] > 89:
+                print self.name,"reason: avg > 89"
+                max_cnt += 2
+
+            if h['avg'] > 100:
+                too_loud_cnt += 2
+
             if h['max'] >= 120:
                 too_loud_cnt += 1
+
             if h['max'] >= 127:
                 extreamely_loud_count += 1
 
@@ -735,6 +743,7 @@ class LevelMonitorSink:
 
             if h['max'] >= 110:
                 max_cnt += 1
+
             if h['max'] <= 80:
                 min_cnt += 1
 
