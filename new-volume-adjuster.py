@@ -12,6 +12,9 @@ import os
 import datetime
 import time
 import math
+import gtk
+import cairo
+from copy import deepcopy
 # From https://github.com/Valodim/python-pulseaudio
 sys.path.append(os.path.join(sys.path[0], "python_pulseaudio", "pulseaudio"))
 from lib_pulseaudio import * 
@@ -26,6 +29,237 @@ DISPLAY_SCALE = 2
 MAX_VOLUME = 153
 MAX_SPACES = MAX_SAMPLE_VALUE >> DISPLAY_SCALE
 
+def wait():
+    # print "leave1"
+    gtk.gdk.threads_leave()
+    # print "/leave1"
+    # print "enter"
+    gtk.gdk.threads_enter()
+    # print "/enter"
+    if gtk.events_pending():
+        while gtk.events_pending():
+            # print "pending:"
+            gtk.main_iteration(False)
+    # print "leave"
+    gtk.gdk.threads_leave()
+
+window = gtk.Window()
+drawing_area = gtk.DrawingArea()
+window.add(drawing_area)
+
+black = gtk.gdk.color_parse("#000")
+red = gtk.gdk.color_parse("#F00")
+green = gtk.gdk.color_parse("#0F0")
+blue = gtk.gdk.color_parse("#00F")
+white = gtk.gdk.color_parse("#FFF")
+
+global cr, widget
+cr = None
+_widget = None
+
+def expose(widget, event):
+    global _widget
+    _widget = widget
+    cr = _widget.window.cairo_create()
+    cr.set_source_rgb(1.0, 1.0, 1.0)
+
+    width, height = window.get_size()
+    cr.rectangle(1, 1, width, height)
+    cr.fill()
+    return
+
+def invert(num, _max, height):
+   
+    percent = (num / _max)
+    inverse = (1.0 - percent)
+    res = inverse * height
+
+     # print "--"
+    # print "num:", num
+    # print "max:", _max
+    # print "height:", height
+    # print "percent:", percent
+    # print "res:", res
+    # print "inverse:", inverse
+    return int(res)
+
+def d(*args):
+    res = []
+    for val in args:
+        res.append(int(val) / 255.0)
+    return res
+
+
+def high(cr):
+    cr.set_source_rgb(*d(69, 81, 185))
+
+def avg(cr):
+    cr.set_source_rgb(*d(8, 18, 109))
+
+def low(cr):
+    cr.set_source_rgb(*d(4, 10, 58))
+
+def black(cr):
+    cr.set_source_rgb(0.0, 0.0, 0.0)
+
+def white(cr):
+    cr.set_source_rgb(1.0, 1.0, 1.0)
+
+def light_grey(cr):
+    cr.set_source_rgb(0.5, 0.5, 0.5)
+
+def draw_lines(cr, x, vol, part_width, half):
+
+    # black(cr)
+    # cr.rectangle(x, vol, part_width, 3)
+    # cr.fill()
+
+    white(cr)
+    cr.rectangle(x, half, part_width, 2)
+    cr.fill()
+
+
+def draw_history(history):
+    global _widget
+    if _widget is None or _widget.window is None:
+        return
+    # print "_widget.window.height", window.get_size()
+    # print "HISTORY:", history
+    cr = _widget.window.cairo_create()
+    width, height = window.get_size()
+
+    max_value = 154.0
+    part_width = width / 10.0
+
+    while len(history) < 10:
+        history.insert(0, {
+            "avg": 0,
+            "min": 0,
+            "vol": 0,
+            "max": 0
+        })
+
+    reverse_history = deepcopy(history)
+    reverse_history.reverse()
+    colors = {
+        'max': d(69, 81, 185),
+        'avg': d(8, 18, 109),
+        'min': d(4, 10, 58),
+        'white': d(255, 255, 255),
+        'black': d(0, 0, 0),
+        'grey': d(50, 50, 100)
+    }
+
+    half = height * 0.5
+    keys = ['max', 'avg', 'min']
+    for i, k in enumerate(keys):
+        idx = width
+        
+        x1 = width
+        last_el = None
+
+        start_vol = invert(reverse_history[0][k], max_value, height)
+        cr.set_source_rgb(*colors[k])
+        cr.move_to(idx, start_vol)
+        cr.line_to(idx, start_vol)
+        
+        for el in reverse_history:
+            idx = idx - part_width
+            vol = invert(el[k], max_value, height)
+            cr.line_to(idx, vol)
+        # now we work forward with the next element
+        cr.line_to(0, vol)
+
+        if i != len(keys) - 1:
+            k2 = keys[i+1]
+            # print "k2:",k2
+            start_vol = invert(history[0][k2], max_value, height)
+            cr.line_to(0, start_vol)
+            idx = 0
+            for el in history:
+                vol = invert(el[k2], max_value, height)
+                cr.line_to(idx, vol)
+                idx = idx + part_width
+            cr.line_to(width, vol)
+            cr.line_to(width, start_vol)
+            
+
+        else:
+            cr.line_to(0, vol)
+            cr.line_to(0, height)
+            cr.line_to(width, height)
+            cr.line_to(width, start_vol)
+        cr.set_line_width(2)
+        cr.close_path()
+        cr.fill()
+        cr.stroke()
+
+        idx = width
+        k = 'vol'
+        start_vol = invert(reverse_history[0][k], max_value, height)
+        cr.set_source_rgb(*colors['black'])
+        cr.move_to(idx, start_vol)
+        for el in reverse_history:
+            idx = idx - part_width
+            vol = invert(el[k], max_value, height)
+            
+            cr.line_to(idx, vol)
+        cr.stroke()
+
+        if i == 0:
+            idx = width
+            k = 'max'
+            start_vol = invert(reverse_history[0][k], max_value, height)
+            cr.set_source_rgb(*colors['white'])
+            cr.move_to(idx, start_vol)
+            cr.line_to(idx, start_vol)
+            for el in reverse_history:
+                idx = idx - part_width
+                vol = invert(el[k], max_value, height)
+                
+                cr.line_to(idx, vol)
+            cr.line_to(0, vol)
+            cr.line_to(0, 0)
+            cr.line_to(width, 0)
+            cr.line_to(width, start_vol)
+            cr.close_path()
+            cr.fill()
+            cr.stroke()
+
+    idx = width
+    k = 'vol'
+    start_vol = invert(reverse_history[0][k], max_value, height)
+    cr.set_source_rgb(*colors['black'])
+    cr.move_to(idx, start_vol)
+    for el in reverse_history:
+        idx = idx - part_width
+        vol = invert(el[k], max_value, height)
+        
+        cr.line_to(idx, vol)
+
+    cr.stroke()
+
+    cr.set_source_rgb(*colors['black'])
+    factor = max_value / 154.0
+    one_hundred_pos = factor * 100
+    _pos = invert(one_hundred_pos, max_value, height)
+    # print "_pos:", _pos
+    cr.set_line_width(1)
+    cr.set_dash([20, 20])
+    cr.move_to(0, _pos)
+    cr.line_to(0, _pos)
+    cr.line_to(width, _pos)
+    cr.stroke()
+    wait()
+
+drawing_area.connect("expose-event", expose)
+
+
+
+
+# drawing_area.draw_rectangle(gc, filled, x, y, width, height)
+window.show_all()
+wait()
 
 def print_mask_type(mask):
     print "mask:",mask, 
@@ -195,7 +429,7 @@ class PeakMonitor(object):
         print "sink_info.name:", sink_info.name
         print "self.sink_name:", self.sink_name
 
-        if sink_info.name == self.sink_name:
+        if 'alsa_output' in sink_info.name:
 
             # Found the sink we want to monitor for peak levels.
             # Tell PA to call stream_read_cb with peak samples.
@@ -387,6 +621,11 @@ class LevelMonitorSink:
         if self.name == 'Event Sound':
             print "EVENT SOUND"
             return
+        try:
+            draw_history(self.long_history)
+        except cairo.Error:
+            pass
+
         bar_data = {}
         for i in range(-1, 200):
             if self.count >= METER_RATE:
@@ -465,14 +704,15 @@ class LevelMonitorSink:
         for h1 in self.long_history:
             for h2 in self.long_history:
                 if h1['min'] != h2['min'] or h1['max'] != h2['max']:
-                    print "LONG HISTORY HAS CHANGED"
+                    # print "LONG HISTORY HAS CHANGED"
                     return True
         print "*!"*60
         print "LONG HISTORY HAS NOT CHANGED"
         print "*!"*60
-        self.long_history = []
-        self.setup_monitor()
         return False
+        # self.long_history = []
+        # self.setup_monitor()
+        # return False
 
     def process_history(self):
         min_cnt = 0
@@ -485,8 +725,16 @@ class LevelMonitorSink:
         bad_cnt = 0
         adj = 0
         for h in self.history:
+            if h['avg'] > 89:
+                print self.name,"reason: avg > 89"
+                max_cnt += 2
+
+            if h['avg'] > 100:
+                too_loud_cnt += 2
+
             if h['max'] >= 120:
                 too_loud_cnt += 1
+
             if h['max'] >= 127:
                 extreamely_loud_count += 1
 
@@ -495,6 +743,7 @@ class LevelMonitorSink:
 
             if h['max'] >= 110:
                 max_cnt += 1
+
             if h['max'] <= 80:
                 min_cnt += 1
 
