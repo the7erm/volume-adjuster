@@ -53,9 +53,13 @@ green = gtk.gdk.color_parse("#0F0")
 blue = gtk.gdk.color_parse("#00F")
 white = gtk.gdk.color_parse("#FFF")
 
-global cr, widget
+global cr, widget, show_window
 cr = None
 _widget = None
+show_window = True
+
+if '--no-window' in sys.argv:
+    show_window = False
 
 def expose(widget, event):
     global _widget
@@ -120,7 +124,9 @@ def draw_lines(cr, x, vol, part_width, half):
 
 
 def draw_history(history):
-    global _widget
+    global _widget, show_window
+    if not show_window:
+        return
     if _widget is None or _widget.window is None:
         return
     # print "_widget.window.height", window.get_size()
@@ -259,6 +265,8 @@ drawing_area.connect("expose-event", expose)
 
 # drawing_area.draw_rectangle(gc, filled, x, y, width, height)
 window.show_all()
+if not show_window:
+    window.iconify()
 wait()
 
 def print_mask_type(mask):

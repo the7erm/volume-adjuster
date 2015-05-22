@@ -15,7 +15,9 @@ git submodule update
 Open up your command line and run `./new-volume-adjuster.py` play some sound.
 
 If it doesn't work run `pavucontrol` and look at the settings make sure everything looks right.
-
+If the sound is distorted you'll need to run `paman` and on the `Devices Tab` reset `Sources` meter by clicking `Reset` so the volume is `100%`.  This needs to be done for the `alsa_input.*` and `alsa_output.*` Sources.
+![Devices Tab](https://cloud.githubusercontent.com/assets/2530157/7775073/1db4661e-006d-11e5-90e3-abd20484e02a.png)
+![Source Example](https://cloud.githubusercontent.com/assets/2530157/7775093/4afea774-006d-11e5-9e8c-9c160e060b8e.png)
 
 #### Graph
 ![graph](https://cloud.githubusercontent.com/assets/2530157/5500637/ee5681b2-8705-11e4-82ff-45f1772fce55.png)
