@@ -21,10 +21,12 @@ To ensure the program is working open up `pavucontrol` and check the `Playback` 
 ![pavucontrol](https://cloud.githubusercontent.com/assets/2530157/7775237/9d8adb06-006e-11e5-9d54-bd9e93ab1cf8.png)
 
 #### Trouble shooting.
-If the sound is distorted you'll need to run `paman` and on the `Devices Tab` open each item in `Sources` and  `Reset` their volume so the volume is `100%`.
+If the sound is distorted you'll need to run `paman` and on the `Devices`  tab open each item in `Sources` and  `Reset` their volume so the volume is `100%`.
 
 ![Devices Tab](https://cloud.githubusercontent.com/assets/2530157/7775073/1db4661e-006d-11e5-90e3-abd20484e02a.png)
-This needs to be done for the `alsa_input.*` and `alsa_output.*` Sources.
+
+This needs to be done for the `alsa_input.*` and `alsa_output.*` `Sources`.
+
 ![Source Example](https://cloud.githubusercontent.com/assets/2530157/7775093/4afea774-006d-11e5-9e8c-9c160e060b8e.png)
 
 #### Graph
